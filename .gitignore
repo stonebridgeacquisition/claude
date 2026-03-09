@@ -1,0 +1,7 @@
+.env
+.tmp/
+node_modules/
+conversation_history.json
+__pycache__/
+*.pyc
+.playwright-mcp/
