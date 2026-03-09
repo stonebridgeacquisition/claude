@@ -1,11 +1,11 @@
 """
-Read .tmp/ai_news.json, call Claude API to generate a post, save to .tmp/skool_post.json
+Read .tmp/ai_news.json, call Gemini to generate a post, save to .tmp/skool_post.json
 """
 import json
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-import anthropic
+import google.generativeai as genai
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "../.env"))
 
@@ -18,7 +18,8 @@ def main():
 
     today = datetime.now().strftime("%A, %B %d, %Y")
 
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+    model = genai.GenerativeModel("gemini-3.0-flash")
 
     prompt = f"""You are writing a daily AI news digest post for a Skool community called "Zero to Auto". The audience is entrepreneurs and builders learning automation and AI.
 
@@ -48,13 +49,8 @@ Write a community announcement post with these rules:
 
 Return valid JSON with exactly two fields: "title" and "body". No markdown, no code fences, just the raw JSON object."""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    raw = response.content[0].text.strip()
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
     post = json.loads(raw)
 
     with open(output_path, "w") as f:

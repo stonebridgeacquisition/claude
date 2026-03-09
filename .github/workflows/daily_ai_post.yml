@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       SKOOL_EMAIL: ${{ secrets.SKOOL_EMAIL }}
@@ -26,7 +26,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python dependencies
-        run: pip install anthropic playwright python-dotenv
+        run: pip install google-generativeai playwright python-dotenv
 
       - name: Install Playwright Chromium
         run: playwright install chromium --with-deps
