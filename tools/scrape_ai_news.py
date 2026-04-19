@@ -1,10 +1,11 @@
 """
-Scrape AI news from 4 sources and save to .tmp/ai_news.json
+Scrape AI news from 4 sources and save to .tmp/ai_news.json.
+Uses requests + BeautifulSoup (Playwright unavailable in this environment).
 """
 import json
 import os
-import sys
-from playwright.sync_api import sync_playwright
+import requests
+from bs4 import BeautifulSoup
 
 SOURCES = [
     ("huggingface", "https://huggingface.co/papers"),
@@ -13,10 +14,25 @@ SOURCES = [
     ("techcrunch",  "https://techcrunch.com/category/artificial-intelligence/"),
 ]
 
-def scrape_source(page, name, url):
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+}
+
+def scrape_source(name, url):
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=20000)
-        text = page.inner_text("body")
+        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # Remove script/style noise
+        for tag in soup(["script", "style", "nav", "footer"]):
+            tag.decompose()
+        text = soup.get_text(separator=" ", strip=True)
+        # Collapse whitespace
+        import re
+        text = re.sub(r"\s+", " ", text)
         print(f"[scrape] {name}: {len(text)} chars", flush=True)
         return text[:2500]
     except Exception as e:
@@ -27,15 +43,7 @@ def main():
     output_path = os.path.join(os.path.dirname(__file__), "../.tmp/ai_news.json")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    results = {}
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        # Open all pages in parallel using separate pages on one browser
-        pages = [browser.new_page() for _ in SOURCES]
-        for (name, url), pg in zip(SOURCES, pages):
-            results[name] = scrape_source(pg, name, url)
-            pg.close()
-        browser.close()
+    results = {name: scrape_source(name, url) for name, url in SOURCES}
 
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
