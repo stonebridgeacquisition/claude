@@ -23,7 +23,11 @@ def main():
     password = os.environ["SKOOL_PASSWORD"]
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path="/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+            args=["--ignore-certificate-errors", "--no-sandbox", "--disable-setuid-sandbox"],
+        )
         page = browser.new_page()
 
         try:
