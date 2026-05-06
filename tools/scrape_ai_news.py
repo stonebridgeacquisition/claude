@@ -1,11 +1,11 @@
 """
 Scrape AI news from 4 sources and save to .tmp/ai_news.json.
-Uses requests + BeautifulSoup (Playwright unavailable in this environment).
+Uses Playwright headless Chromium to bypass 403 blocks from requests-based scraping.
 """
 import json
 import os
-import requests
-from bs4 import BeautifulSoup
+import re
+from playwright.sync_api import sync_playwright
 
 SOURCES = [
     ("huggingface", "https://huggingface.co/papers"),
@@ -14,25 +14,18 @@ SOURCES = [
     ("techcrunch",  "https://techcrunch.com/category/artificial-intelligence/"),
 ]
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-}
+BROWSER_PATH = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
 
-def scrape_source(name, url):
+def scrape_source(page, name, url):
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        # Remove script/style noise
-        for tag in soup(["script", "style", "nav", "footer"]):
-            tag.decompose()
-        text = soup.get_text(separator=" ", strip=True)
-        # Collapse whitespace
-        import re
-        text = re.sub(r"\s+", " ", text)
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # Remove noise elements
+        page.evaluate("""
+            document.querySelectorAll('script, style, nav, footer, header, [role="banner"], [role="navigation"]')
+                .forEach(el => el.remove());
+        """)
+        text = page.inner_text("body")
+        text = re.sub(r"\s+", " ", text).strip()
         print(f"[scrape] {name}: {len(text)} chars", flush=True)
         return text[:2500]
     except Exception as e:
@@ -43,7 +36,23 @@ def main():
     output_path = os.path.join(os.path.dirname(__file__), "../.tmp/ai_news.json")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    results = {name: scrape_source(name, url) for name, url in SOURCES}
+    results = {}
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path=BROWSER_PATH,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--ignore-certificate-errors"],
+        )
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+        )
+        page = context.new_page()
+        for name, url in SOURCES:
+            results[name] = scrape_source(page, name, url)
+        browser.close()
 
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
