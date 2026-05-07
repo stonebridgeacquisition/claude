@@ -62,6 +62,12 @@ Return valid JSON with exactly two fields: "title" and "body". No markdown, no c
     )
 
     raw = message.content[0].text.strip()
+    # Strip markdown code fences if present (model sometimes wraps JSON in ```json ... ```)
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rstrip("`").strip()
     post = json.loads(raw)
 
     with open(output_path, "w") as f:
