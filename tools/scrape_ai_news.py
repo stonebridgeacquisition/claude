@@ -1,11 +1,12 @@
 """
 Scrape AI news from 4 sources and save to .tmp/ai_news.json.
-Uses Playwright headless Chromium to bypass 403 blocks from requests-based scraping.
+Uses requests + BeautifulSoup (Playwright/Chromium not available in this environment).
 """
 import json
 import os
 import re
-from playwright.sync_api import sync_playwright
+import requests
+from bs4 import BeautifulSoup
 
 SOURCES = [
     ("huggingface", "https://huggingface.co/papers"),
@@ -14,17 +15,23 @@ SOURCES = [
     ("techcrunch",  "https://techcrunch.com/category/artificial-intelligence/"),
 ]
 
-BROWSER_PATH = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+}
 
-def scrape_source(page, name, url):
+def scrape_source(name, url):
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        # Remove noise elements
-        page.evaluate("""
-            document.querySelectorAll('script, style, nav, footer, header, [role="banner"], [role="navigation"]')
-                .forEach(el => el.remove());
-        """)
-        text = page.inner_text("body")
+        resp = requests.get(url, headers=HEADERS, timeout=30)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        text = soup.get_text(separator=" ")
         text = re.sub(r"\s+", " ", text).strip()
         print(f"[scrape] {name}: {len(text)} chars", flush=True)
         return text[:2500]
@@ -37,22 +44,8 @@ def main():
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     results = {}
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            executable_path=BROWSER_PATH,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--ignore-certificate-errors"],
-        )
-        context = browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-        )
-        page = context.new_page()
-        for name, url in SOURCES:
-            results[name] = scrape_source(page, name, url)
-        browser.close()
+    for name, url in SOURCES:
+        results[name] = scrape_source(name, url)
 
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)

@@ -65,3 +65,25 @@ In `tools/post_to_skool.py`, change `headless=False` → `headless=True`
 
 ## Self-Improvement
 When selectors change or sources go down, update this workflow and the relevant tool. Document the fix here.
+
+## Known Limitations (documented 2026-05-10)
+
+### Chromium / Playwright not available
+In containerized/cloud environments, `python3 -m playwright install chromium` fails because outbound access to Chrome for Testing CDN is blocked. Fallback: `scrape_ai_news.py` was rewritten to use `requests` + `BeautifulSoup`.
+
+### All 4 news sources return 403 with requests
+HuggingFace, Anthropic, OpenAI, and TechCrunch all block plain `requests` with a proper `User-Agent`. The original Playwright approach was specifically needed to bypass this. Until a browser is available, the scraper will always pass error strings to Claude. Claude will generate a honest "sources unavailable" post (see `.tmp/skool_post.json` for example output).
+
+**Fix options:**
+- Install a full browser (Chromium/Firefox) in the environment so Playwright can use it with `executable_path`
+- Use a paid scraping proxy service (e.g. ScrapingBee, Browserless) — add API key to `.env` and update `scrape_ai_news.py`
+
+### .env file missing
+`SKOOL_EMAIL` and `SKOOL_PASSWORD` must be in `.env` at the repo root for Phase 3 to run. Create `.env` with:
+```
+SKOOL_EMAIL=your@email.com
+SKOOL_PASSWORD=yourpassword
+```
+
+### Phase 3 (post_to_skool.py) also requires Playwright
+Same Chromium dependency — blocked by the same issue. Needs a browser in the environment.
