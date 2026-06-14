@@ -69,14 +69,13 @@ When selectors change or sources go down, update this workflow and the relevant 
 ## Known Limitations (documented 2026-05-10)
 
 ### Chromium / Playwright not available
-In containerized/cloud environments, `python3 -m playwright install chromium` fails because outbound access to Chrome for Testing CDN is blocked. Fallback: `scrape_ai_news.py` was rewritten to use `requests` + `BeautifulSoup`.
+In containerized/cloud environments, `python3 -m playwright install chromium` fails because outbound access to Chrome for Testing CDN is blocked. However, Chromium is pre-installed at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` and the `playwright` Python package can be installed with `pip install playwright`. The scraper now uses this path directly — no separate `playwright install` step needed.
 
-### All 4 news sources return 403 with requests
-HuggingFace, Anthropic, OpenAI, and TechCrunch all block plain `requests` with a proper `User-Agent`. The original Playwright approach was specifically needed to bypass this. Until a browser is available, the scraper will always pass error strings to Claude. Claude will generate a honest "sources unavailable" post (see `.tmp/skool_post.json` for example output).
+### News sources blocked by network egress
+All 4 sources (HuggingFace, Anthropic, OpenAI, TechCrunch) are blocked by the cloud environment's outbound network allowlist. The generated post notes the outage and explains the pipeline failure honestly. To fix: add these hosts to the network egress allowlist in session settings: `huggingface.co`, `www.anthropic.com`, `openai.com`, `techcrunch.com`.
 
-**Fix options:**
-- Install a full browser (Chromium/Firefox) in the environment so Playwright can use it with `executable_path`
-- Use a paid scraping proxy service (e.g. ScrapingBee, Browserless) — add API key to `.env` and update `scrape_ai_news.py`
+### All 4 news sources blocked by network egress (not 403)
+In the current cloud session, all sources fail with "Host not in allowlist" — this is a network egress restriction, not a bot-detection 403. Playwright with the pre-installed Chromium would work if the hosts were allowlisted. See the "News sources blocked by network egress" note above.
 
 ### .env file missing
 `SKOOL_EMAIL` and `SKOOL_PASSWORD` must be in `.env` at the repo root for Phase 3 to run. Create `.env` with:
@@ -84,6 +83,7 @@ HuggingFace, Anthropic, OpenAI, and TechCrunch all block plain `requests` with a
 SKOOL_EMAIL=your@email.com
 SKOOL_PASSWORD=yourpassword
 ```
+**Confirmed blocking in cloud sessions** — the `.env` file is gitignored and does not exist in the cloud container. Add `SKOOL_EMAIL` and `SKOOL_PASSWORD` as repository secrets or environment variables in the session settings so Phase 3 can authenticate.
 
 ### Phase 3 (post_to_skool.py) also requires Playwright
 Same Chromium dependency — blocked by the same issue. Needs a browser in the environment.
