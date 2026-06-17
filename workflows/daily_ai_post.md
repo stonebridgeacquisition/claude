@@ -66,18 +66,21 @@ In `tools/post_to_skool.py`, change `headless=False` → `headless=True`
 ## Self-Improvement
 When selectors change or sources go down, update this workflow and the relevant tool. Document the fix here.
 
-## Known Limitations (documented 2026-05-10)
+## Known Limitations (documented 2026-05-10, updated 2026-06-17)
 
 ### Chromium / Playwright not available
-In containerized/cloud environments, `python3 -m playwright install chromium` fails because outbound access to Chrome for Testing CDN is blocked. However, Chromium is pre-installed at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` and the `playwright` Python package can be installed with `pip install playwright`. The scraper now uses this path directly — no separate `playwright install` step needed.
+In containerized/cloud environments, `python3 -m playwright install chromium` fails because outbound access to Chrome for Testing CDN is blocked. Previously Chromium was pre-installed at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` — **as of 2026-06-17 that path no longer exists**. No Chromium is available in the container. Phase 1 and Phase 3 both require Playwright; neither can run without a browser.
 
-### News sources blocked by network egress
-All 4 sources (HuggingFace, Anthropic, OpenAI, TechCrunch) are blocked by the cloud environment's outbound network allowlist. The generated post notes the outage and explains the pipeline failure honestly. To fix: add these hosts to the network egress allowlist in session settings: `huggingface.co`, `www.anthropic.com`, `openai.com`, `techcrunch.com`.
+**Workaround for Phase 1 (news scraping):** Claude's built-in WebSearch tool can fetch current AI news even when direct HTTP is blocked. Replace the Playwright scraper with WebSearch calls from within the agent, save results directly to `.tmp/ai_news.json`. This is now the recommended approach for cloud sessions.
 
-### All 4 news sources blocked by network egress (not 403)
-In the current cloud session, all sources fail with "Host not in allowlist" — this is a network egress restriction, not a bot-detection 403. Playwright with the pre-installed Chromium would work if the hosts were allowlisted. See the "News sources blocked by network egress" note above.
+**Workaround for Phase 2 (generate post):** Because this workflow runs inside Claude Code, Claude itself can generate the post directly without calling `generate_skool_post.py`. The `anthropic` Python package can be installed with `pip install anthropic` if needed for standalone use.
 
-### .env file missing
+**Phase 3 (post to Skool) remains fully blocked** — no browser is available and no Skool credentials are in the environment. See below.
+
+### News sources blocked by network egress (HTTP 403)
+All 4 sources (HuggingFace, Anthropic, OpenAI, TechCrunch) return HTTP 403 when fetched via WebFetch. Claude's WebSearch tool successfully retrieves current AI news without these restrictions and is now the fallback for Phase 1.
+
+### .env file missing / Skool credentials not set
 `SKOOL_EMAIL` and `SKOOL_PASSWORD` must be in `.env` at the repo root for Phase 3 to run. Create `.env` with:
 ```
 SKOOL_EMAIL=your@email.com
@@ -86,4 +89,4 @@ SKOOL_PASSWORD=yourpassword
 **Confirmed blocking in cloud sessions** — the `.env` file is gitignored and does not exist in the cloud container. Add `SKOOL_EMAIL` and `SKOOL_PASSWORD` as repository secrets or environment variables in the session settings so Phase 3 can authenticate.
 
 ### Phase 3 (post_to_skool.py) also requires Playwright
-Same Chromium dependency — blocked by the same issue. Needs a browser in the environment.
+Same Chromium dependency — blocked by the same issue. Needs a browser in the environment. Until both a browser and credentials are available in the cloud session, Phase 3 cannot run automatically. The generated post is saved to `.tmp/skool_post.json` so it can be posted manually.
